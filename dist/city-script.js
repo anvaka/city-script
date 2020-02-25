@@ -91,7 +91,7 @@ module.exports = function findPaths(scene, options) {
     let startTime = window.performance.now();
     let timeLimit = 20;
 
-    while (elapsedTime < timeLimit && totalAdded < pathLimit && explored < count) {
+    while (elapsedTime < timeLimit && explored < count) {
       let fromId = foundFromId || nodeIds[Math.floor(random.nextDouble() * nodeIds.length)];
       let toId = nodeIds[Math.floor(random.nextDouble() * nodeIds.length)];
 
