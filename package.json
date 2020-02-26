@@ -1,4 +1,5 @@
 {
+  "version": "0.0.1",
   "name": "city-script",
   "description": "A set of simple scripts that can be loaded to https://github.com/anvaka/city-roads",
   "scripts": {
