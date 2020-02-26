@@ -1,5 +1,5 @@
-var findPaths = require('./lib/findPaths');
 
 module.exports = {
-  findPaths: findPaths
+  findPaths: require('./lib/findPaths'),
+  elevation: require('./lib/elevation')
 }

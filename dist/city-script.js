@@ -1,10 +1,274 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.city = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-var findPaths = require('./lib/findPaths');
 
 module.exports = {
-  findPaths: findPaths
+  findPaths: require('./lib/findPaths'),
+  elevation: require('./lib/elevation')
 }
-},{"./lib/findPaths":2}],2:[function(require,module,exports){
+},{"./lib/elevation":2,"./lib/findPaths":3}],2:[function(require,module,exports){
+const MAPBOX_TOKEN = 'pk.eyJ1IjoiYW52YWthIiwiYSI6ImNqaWUzZmhqYzA1OXMza213YXh2ZzdnOWcifQ.t5yext53zn1c9Ixd7Y41Dw';
+const apiURL = `https://api.mapbox.com/v4/mapbox.terrain-rgb/zoom/tLong/tLat@2x.pngraw?access_token=${MAPBOX_TOKEN}`;
+const tileSize = 512;
+let imageCache = new Map();
+
+module.exports = function elevation(scene, options = {}) {
+  let mainLayer = scene.queryLayer();
+  const grid = mainLayer.grid;
+  let nodes = grid.nodes;
+  let wayPointCount = grid.wayPointCount;
+  let heightRoads;
+  let bounds = {
+    west: Infinity,
+    south: Infinity,
+    north: -Infinity,
+    east: -Infinity
+  };
+  nodes.forEach(node => {
+    if (node.lat < bounds.south) bounds.south = node.lat;
+    if (node.lat > bounds.north) bounds.north = node.lat;
+    if (node.lon < bounds.west) bounds.west = node.lon;
+    if (node.lon > bounds.east) bounds.east = node.lon;
+  });
+
+  const elevationTiles = getTileCover(bounds);
+
+  return loadTiles(elevationTiles).then(makePublicAPI);
+
+  function makePublicAPI(elevationAPI) {
+    return {
+      drawWithColor(getColor) {
+        return renderHeights(elevationAPI, getColor);
+      },
+      drawWithHeight(height, belowWaterColor = 0xff0000ff) {
+        let color = scene.lineColor.toRgb();
+        let defaultColor = (color.r << 24) | (color.g << 16) | (color.b << 8) | Math.round(color.a * 0xff);
+        return renderHeights(elevationAPI, pointHeight => pointHeight < height ? belowWaterColor : defaultColor)
+      }
+    }
+  }
+
+  function renderHeights(api, getColor) {
+    // Sometimes they want to keep the original city. Otherwise let's clear it
+    if (!options.keepScene) scene.clear();
+    ensureLicenseVisible();
+
+    let wgl = scene.getWGL();
+    if (heightRoads) {
+      heightRoads.parent.removeChild(heightRoads);
+    }
+
+    heightRoads = new wgl.WireCollection(wayPointCount, {
+      allowColors: true
+    });
+
+    forEachWay(function(from, to) {
+      heightRoads.add({from, to});
+    });
+
+    scene.getRenderer().appendChild(heightRoads);
+
+    function forEachWay(callback) {
+      let positions = nodes;
+      let project = grid.getProjector();
+      grid.elements.forEach(element => {
+        if (element.type !== 'way') return;
+
+        let nodeIds = element.nodes;
+        let node = positions.get(nodeIds[0])
+        if (!node) return;
+
+        let last = project(node);
+        last.z = api.getElevation(node.lon, node.lat);
+        last.color = getColor(last.z);
+
+        for (let index = 1; index < nodeIds.length; ++index) {
+          node = positions.get(nodeIds[index])
+          if (!node) continue;
+          let next = project(node);
+          next.z = api.getElevation(node.lon, node.lat)
+          next.color = getColor(next.z);
+          callback(last, next);
+
+          last = next;
+        }
+      });
+    }
+  }
+
+  function ensureLicenseVisible() {
+    if (document.querySelector('.license.printable .mapbox')) return;
+    let a = document.createElement('a');
+    a.target = '_blank';
+    a.href = 'https://www.mapbox.com/about/maps/';
+    a.innerText = '© Mapbox';
+    a.classList.add('mapbox');
+    let osmLink = document.querySelector('.license.printable a');
+    if (osmLink) {
+      a.style.color = osmLink.style.color;
+    }
+    a.style.marginLeft = '2px';
+    document.querySelector('.license.printable').appendChild(a);
+  }
+}
+
+function getTileCover(bounds) {
+  let zoomLevel, sw, se, ne, nw;
+  for (let z = 0; z < 12; ++z) {
+    sw = pointToTile(bounds.west, bounds.south, z);
+    se = pointToTile(bounds.east, bounds.south, z);
+    ne = pointToTile(bounds.east, bounds.north, z);
+    nw = pointToTile(bounds.west, bounds.north, z);
+    if (!same(sw, se) || !same(se, ne) || !same(ne, nw)) {
+      zoomLevel = z;
+      break;
+    }
+  }
+
+  zoomLevel += 1;
+  sw = pointToTile(bounds.west, bounds.south, zoomLevel);
+  se = pointToTile(bounds.east, bounds.south, zoomLevel);
+  ne = pointToTile(bounds.east, bounds.north, zoomLevel);
+  nw = pointToTile(bounds.west, bounds.north, zoomLevel);
+  let minX = Math.min(sw[0], nw[0]);
+  let minY = Math.min(ne[1], nw[1]);
+  let maxX = Math.max(se[0], ne[0]);
+  let maxY = Math.max(se[1], sw[1]);
+  return {
+    minX, minY, maxY, maxX, zoomLevel
+  };
+}
+
+function same(arr1, arr2) {
+  if (arr1.length !== arr2.length) return false;
+  for (let i = 0; i < arr1.length; ++i) {
+    if (arr1[i] !== arr2[i]) return false;
+  }
+
+  return true;
+}
+
+function getRequestForTile(x, y, z, tileBounds) {
+  const url = apiURL
+    .replace('zoom', z)
+    .replace('tLat', y)
+    .replace('tLong', x);
+
+  return {
+    url,
+    x: tileSize * (x - tileBounds.minX), 
+    y: tileSize * (y - tileBounds.minY)
+  }
+}
+
+function loadTiles(tileBounds) {
+  let {minX, minY, maxX, maxY, zoomLevel} = tileBounds;
+  const widthInTiles = tileBounds.maxX - tileBounds.minX;
+  const heightInTiles = tileBounds.maxY - tileBounds.minY;
+  if (widthInTiles > 50 || heightInTiles > 50) throw new Error('Too many tiles requested. How did you do it?');
+
+
+  let coveringTiles = [];
+  for (let x = minX; x <= maxX; ++x) {
+    for (let y = minY; y <= maxY; ++y) {
+      let request = getRequestForTile(x, y, zoomLevel, tileBounds)
+      coveringTiles.push(request);
+    }
+  }
+
+  const canvas = document.createElement("canvas");
+  let canvasWidth = canvas.width = (widthInTiles + 1) * tileSize;
+  let canvasHeight = canvas.height = (heightInTiles + 1) * tileSize;
+
+  const ctx = canvas.getContext('2d');
+  let imageData;
+  const tilesToLoad = coveringTiles.map(toLoadedTile)
+
+  return Promise.all(tilesToLoad).then(constructAPI);
+
+  function constructAPI() {
+    imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight).data;
+
+    return {
+      getElevation
+    };
+  }
+
+  function getElevation(lon, lat) {
+    let pos = pointToTileFraction(lon, lat, zoomLevel);
+    let xC = Math.round((pos[0] - minX) * tileSize);
+    let yC = Math.round((pos[1] - minY) * tileSize);
+    let index = (yC * canvasWidth + xC) * 4;
+
+    let R = imageData[index + 0];
+    let G = imageData[index + 1];
+    let B = imageData[index + 2];
+    return decodeHeight(R, G, B);
+  }
+
+  function decodeHeight(R, G, B) {
+    return -10000 + ((R * 256 * 256 + G * 256 + B) * 0.1)
+  }
+
+
+  function toLoadedTile(request) {
+    return loadImage(request.url)
+      .then(drawTileImage)
+      .catch(drawBlankTile)
+
+    function drawTileImage(image) {
+      ctx.drawImage(image, request.x, request.y);
+    }
+
+    function drawBlankTile() {
+      ctx.beginPath();
+      ctx.fillStyle = '#0186a0'; // zero height
+      ctx.fillRect(request.x, request.y, tileSize, tileSize);
+    }
+  }
+}
+
+function loadImage(url) {
+  let cachedImage = imageCache.get(url);
+  if (!cachedImage) {
+    cachedImage = new Promise((resolve, error) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve(img);
+      };
+      img.onerror = error;
+      img.crossOrigin = "anonymous";
+      img.src = url;
+    });
+    imageCache.set(url, cachedImage);
+  }
+
+  return cachedImage;
+}
+
+// The following bit is from 
+// https://github.com/mapbox/tilebelt/blob/master/index.js
+// (C) The MIT License (MIT)
+// Copyright (c) 2014 Morgan Herlocker
+function pointToTile(lon, lat, z) {
+    var tile = pointToTileFraction(lon, lat, z);
+    tile[0] = Math.floor(tile[0]);
+    tile[1] = Math.floor(tile[1]);
+    return tile;
+}
+
+function pointToTileFraction(lon, lat, z) {
+  var d2r = Math.PI / 180;
+  var sin = Math.sin(lat * d2r),
+      z2 = Math.pow(2, z),
+      x = z2 * (lon / 360 + 0.5),
+      y = z2 * (0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI);
+
+    // Wrap Tile X
+    x = x % z2
+    if (x < 0) x = x + z2
+    return [x, y, z];
+}
+
+},{}],3:[function(require,module,exports){
 /**
  * This module renders shortest paths on a city roads graph.
  * 
@@ -221,7 +485,7 @@ function projected(node1, node2) {
 }
 
 module.exports.distances = distances;
-},{"./toGraph":3,"ngraph.path":14,"ngraph.random":15}],3:[function(require,module,exports){
+},{"./toGraph":4,"ngraph.path":15,"ngraph.random":16}],4:[function(require,module,exports){
 let createGraph = require('ngraph.graph');
 
 module.exports = function toGraph(osmElements) {
@@ -250,7 +514,7 @@ module.exports = function toGraph(osmElements) {
   return graph;
 
 }
-},{"ngraph.graph":5}],4:[function(require,module,exports){
+},{"ngraph.graph":6}],5:[function(require,module,exports){
 module.exports = function eventify(subject) {
   validateSubject(subject);
 
@@ -340,7 +604,7 @@ function validateSubject(subject) {
   }
 }
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 /**
  * @fileOverview Contains definition of the core graph object.
  */
@@ -915,7 +1179,7 @@ function makeLinkId(fromId, toId) {
   return fromId.toString() + '👉 ' + toId.toString();
 }
 
-},{"ngraph.events":4}],6:[function(require,module,exports){
+},{"ngraph.events":5}],7:[function(require,module,exports){
 /**
  * Based on https://github.com/mourner/tinyqueue
  * Copyright (c) 2017, Vladimir Agafonkin https://github.com/mourner/tinyqueue/blob/master/LICENSE
@@ -1039,7 +1303,7 @@ NodeHeap.prototype = {
     setNodeId(item, pos);
   }
 };
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /**
  * Performs suboptimal, greed A Star path finding.
  * This finder does not necessary finds the shortest path. The path
@@ -1270,7 +1534,7 @@ function aStarBi(graph, options) {
   }
 }
 
-},{"./NodeHeap":6,"./defaultSettings":9,"./heuristics":10,"./makeSearchStatePool":11}],8:[function(require,module,exports){
+},{"./NodeHeap":7,"./defaultSettings":10,"./heuristics":11,"./makeSearchStatePool":12}],9:[function(require,module,exports){
 /**
  * Performs a uni-directional A Star search on graph.
  * 
@@ -1417,7 +1681,7 @@ function reconstructPath(searchState) {
   return path;
 }
 
-},{"./NodeHeap":6,"./defaultSettings.js":9,"./heuristics":10,"./makeSearchStatePool":11}],9:[function(require,module,exports){
+},{"./NodeHeap":7,"./defaultSettings.js":10,"./heuristics":11,"./makeSearchStatePool":12}],10:[function(require,module,exports){
 // We reuse instance of array, but we trie to freeze it as well,
 // so that consumers don't modify it. Maybe it's a bad idea.
 var NO_PATH = [];
@@ -1475,7 +1739,7 @@ function setH1(node, heapIndex) {
 function setH2(node, heapIndex) {
   node.h2 = heapIndex;
 }
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 module.exports = {
   l2: l2,
   l1: l1
@@ -1504,7 +1768,7 @@ function l1(a, b) {
   return Math.abs(dx) + Math.abs(dy);
 }
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /**
  * This class represents a single search node in the exploration tree for
  * A* algorithm.
@@ -1569,7 +1833,7 @@ function makeSearchStatePool() {
   }
 }
 module.exports = makeSearchStatePool;
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 module.exports = nba;
 
 var NodeHeap = require('../NodeHeap');
@@ -1828,7 +2092,7 @@ function reconstructPath(searchState) {
   return path;
 }
 
-},{"../NodeHeap":6,"../defaultSettings.js":9,"../heuristics":10,"./makeNBASearchStatePool.js":13}],13:[function(require,module,exports){
+},{"../NodeHeap":7,"../defaultSettings.js":10,"../heuristics":11,"./makeNBASearchStatePool.js":14}],14:[function(require,module,exports){
 module.exports = makeNBASearchStatePool;
 
 /**
@@ -1948,14 +2212,14 @@ function makeNBASearchStatePool() {
   }
 }
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 module.exports = {
   aStar: require('./a-star/a-star.js'),
   aGreedy: require('./a-star/a-greedy-star'),
   nba: require('./a-star/nba/index.js'),
 }
 
-},{"./a-star/a-greedy-star":7,"./a-star/a-star.js":8,"./a-star/nba/index.js":12}],15:[function(require,module,exports){
+},{"./a-star/a-greedy-star":8,"./a-star/a-star.js":9,"./a-star/nba/index.js":13}],16:[function(require,module,exports){
 module.exports = random;
 
 // TODO: Deprecate?
