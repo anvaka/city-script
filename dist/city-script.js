@@ -54,10 +54,7 @@ module.exports = function elevation(scene, options = {}) {
     colorLayer.forEach(layer => {
       layer.parent.removeChild(layer);
     })
-
-    // heightRoads = new wgl.WireCollection(1024, {
-    //   allowColors: true
-    // });
+    colorLayer = new Map();
 
     forEachWay(function(from, to) {
       let layer = colorLayer.get(from.color);
