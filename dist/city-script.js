@@ -22,6 +22,7 @@ module.exports = function elevation(scene, options = {}) {
     north: -Infinity,
     east: -Infinity
   };
+
   nodes.forEach(node => {
     if (node.lat < bounds.south) bounds.south = node.lat;
     if (node.lat > bounds.north) bounds.north = node.lat;
@@ -29,7 +30,7 @@ module.exports = function elevation(scene, options = {}) {
     if (node.lon > bounds.east) bounds.east = node.lon;
   });
 
-  const elevationTiles = getTileCover(bounds);
+  const elevationTiles = getTileCover(bounds, options.zoomLevel);
 
   return loadTiles(elevationTiles).then(makePublicAPI);
 
@@ -118,19 +119,20 @@ module.exports = function elevation(scene, options = {}) {
   }
 }
 
-function getTileCover(bounds) {
-  let zoomLevel;
-  let latDiff = bounds.north - bounds.south;
-  let lngDiff = bounds.east - bounds.west;
+function getTileCover(bounds, zoomLevel) {
+  if (zoomLevel === undefined) {
+    let latDiff = bounds.north - bounds.south;
+    let lngDiff = bounds.east - bounds.west;
 
-  let maxDiff = (lngDiff > latDiff) ? lngDiff : latDiff;
-  if (maxDiff < 360 / Math.pow(2, 20)) zoomLevel = 21;
-  else {
-    zoomLevel = (-1*( (Math.log(maxDiff)/Math.log(2)) - (Math.log(360)/Math.log(2))));
-    if (zoomLevel < 1) zoomLevel = 1;
+    let maxDiff = (lngDiff > latDiff) ? lngDiff : latDiff;
+    if (maxDiff < 360 / Math.pow(2, 20)) zoomLevel = 21;
+    else {
+      zoomLevel = (-1*( (Math.log(maxDiff)/Math.log(2)) - (Math.log(360)/Math.log(2))));
+      if (zoomLevel < 1) zoomLevel = 1;
+    }
+    zoomLevel = Math.floor(zoomLevel) + 1;
   }
 
-  zoomLevel = Math.floor(zoomLevel) + 1;
   let sw = pointToTile(bounds.west, bounds.south, zoomLevel);
   let se = pointToTile(bounds.east, bounds.south, zoomLevel);
   let ne = pointToTile(bounds.east, bounds.north, zoomLevel);
@@ -161,7 +163,7 @@ function loadTiles(tileBounds) {
   let {minX, minY, maxX, maxY, zoomLevel} = tileBounds;
   const widthInTiles = tileBounds.maxX - tileBounds.minX;
   const heightInTiles = tileBounds.maxY - tileBounds.minY;
-  if (widthInTiles > 50 || heightInTiles > 50) throw new Error('Too many tiles requested. How did you do it?');
+  if (widthInTiles > 20 || heightInTiles > 20) throw new Error('Too many tiles requested. Please reduce the bounding area');
 
   let coveringTiles = [];
   for (let x = minX; x <= maxX; ++x) {
