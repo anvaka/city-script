@@ -9,6 +9,7 @@ const MAPBOX_TOKEN = 'pk.eyJ1IjoiYW52YWthIiwiYSI6ImNqaWUzZmhqYzA1OXMza213YXh2Zzd
 const apiURL = `https://api.mapbox.com/v4/mapbox.terrain-rgb/zoom/tLong/tLat@2x.pngraw?access_token=${MAPBOX_TOKEN}`;
 const tileSize = 512;
 let imageCache = new Map();
+const d2r = Math.PI / 180;
 
 module.exports = function elevation(scene, options = {}) {
   let mainLayer = scene.queryLayer();
@@ -118,23 +119,22 @@ module.exports = function elevation(scene, options = {}) {
 }
 
 function getTileCover(bounds) {
-  let zoomLevel, sw, se, ne, nw;
-  for (let z = 0; z < 12; ++z) {
-    sw = pointToTile(bounds.west, bounds.south, z);
-    se = pointToTile(bounds.east, bounds.south, z);
-    ne = pointToTile(bounds.east, bounds.north, z);
-    nw = pointToTile(bounds.west, bounds.north, z);
-    if (!same(sw, se) || !same(se, ne) || !same(ne, nw)) {
-      zoomLevel = z;
-      break;
-    }
+  let zoomLevel;
+  let latDiff = bounds.north - bounds.south;
+  let lngDiff = bounds.east - bounds.west;
+
+  let maxDiff = (lngDiff > latDiff) ? lngDiff : latDiff;
+  if (maxDiff < 360 / Math.pow(2, 20)) zoomLevel = 21;
+  else {
+    zoomLevel = (-1*( (Math.log(maxDiff)/Math.log(2)) - (Math.log(360)/Math.log(2))));
+    if (zoomLevel < 1) zoomLevel = 1;
   }
 
-  zoomLevel += 1;
-  sw = pointToTile(bounds.west, bounds.south, zoomLevel);
-  se = pointToTile(bounds.east, bounds.south, zoomLevel);
-  ne = pointToTile(bounds.east, bounds.north, zoomLevel);
-  nw = pointToTile(bounds.west, bounds.north, zoomLevel);
+  zoomLevel = Math.floor(zoomLevel) + 1;
+  let sw = pointToTile(bounds.west, bounds.south, zoomLevel);
+  let se = pointToTile(bounds.east, bounds.south, zoomLevel);
+  let ne = pointToTile(bounds.east, bounds.north, zoomLevel);
+  let nw = pointToTile(bounds.west, bounds.north, zoomLevel);
   let minX = Math.min(sw[0], nw[0]);
   let minY = Math.min(ne[1], nw[1]);
   let maxX = Math.max(se[0], ne[0]);
@@ -142,15 +142,6 @@ function getTileCover(bounds) {
   return {
     minX, minY, maxY, maxX, zoomLevel
   };
-}
-
-function same(arr1, arr2) {
-  if (arr1.length !== arr2.length) return false;
-  for (let i = 0; i < arr1.length; ++i) {
-    if (arr1[i] !== arr2[i]) return false;
-  }
-
-  return true;
 }
 
 function getRequestForTile(x, y, z, tileBounds) {
@@ -172,7 +163,6 @@ function loadTiles(tileBounds) {
   const heightInTiles = tileBounds.maxY - tileBounds.minY;
   if (widthInTiles > 50 || heightInTiles > 50) throw new Error('Too many tiles requested. How did you do it?');
 
-
   let coveringTiles = [];
   for (let x = minX; x <= maxX; ++x) {
     for (let y = minY; y <= maxY; ++y) {
@@ -181,7 +171,7 @@ function loadTiles(tileBounds) {
     }
   }
 
-  const canvas = document.createElement("canvas");
+  const canvas = document.createElement('canvas');
   let canvasWidth = canvas.width = (widthInTiles + 1) * tileSize;
   let canvasHeight = canvas.height = (heightInTiles + 1) * tileSize;
 
@@ -214,7 +204,6 @@ function loadTiles(tileBounds) {
   function decodeHeight(R, G, B) {
     return -10000 + ((R * 256 * 256 + G * 256 + B) * 0.1)
   }
-
 
   function toLoadedTile(request) {
     return loadImage(request.url)
@@ -251,9 +240,8 @@ function loadImage(url) {
   return cachedImage;
 }
 
-// The following bit is from 
-// https://github.com/mapbox/tilebelt/blob/master/index.js
-// (C) The MIT License (MIT)
+// this function is from https://github.com/mapbox/tilebelt/blob/master/index.js
+// The MIT License (MIT)
 // Copyright (c) 2014 Morgan Herlocker
 function pointToTile(lon, lat, z) {
     var tile = pointToTileFraction(lon, lat, z);
@@ -262,19 +250,20 @@ function pointToTile(lon, lat, z) {
     return tile;
 }
 
+// this function is from https://github.com/mapbox/tilebelt/blob/master/index.js
+// The MIT License (MIT)
+// Copyright (c) 2014 Morgan Herlocker
 function pointToTileFraction(lon, lat, z) {
-  var d2r = Math.PI / 180;
-  var sin = Math.sin(lat * d2r),
-      z2 = Math.pow(2, z),
-      x = z2 * (lon / 360 + 0.5),
-      y = z2 * (0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI);
+    var sin = Math.sin(lat * d2r),
+        z2 = Math.pow(2, z),
+        x = z2 * (lon / 360 + 0.5),
+        y = z2 * (0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI);
 
     // Wrap Tile X
     x = x % z2
     if (x < 0) x = x + z2
     return [x, y, z];
 }
-
 },{}],3:[function(require,module,exports){
 /**
  * This module renders shortest paths on a city roads graph.
