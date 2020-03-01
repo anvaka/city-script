@@ -59,3 +59,41 @@ d.drawWithColor(elevation => {
   return 0x000000ff;
 });
 ```
+
+## Animation
+
+This is just an example of how you can make an animation of raising animation. Open developer tools
+and paste this code:
+
+``` js
+let city = await requireModule('city-script');
+let d = await city.elevation(scene);
+
+function doAnimation(options) {
+  let min = -1, max = 100, color = 0x0066ffff;
+  if (options) {
+    if (options.min !== undefined) min = options.min;
+    if (options.max !== undefined) max = options.max;
+    if (options.color !== undefined) color = options.color;
+  }
+
+  let lastHeight = min;
+  let name = scene.queryLayer().grid.name.split(',')[0];
+
+  frame();
+
+  function frame() {
+    lastHeight += 1;  
+    document.querySelector('.city-name .printable').innerText = name + ' ' + lastHeight + 'm';
+    d.drawWithHeight(lastHeight, color); 
+
+    if (lastHeight < max) requestAnimationFrame(frame);
+  }
+}
+
+doAnimation({
+  min: 0, 
+  max: 100,
+  color: 0x0066ffff
+});
+```
