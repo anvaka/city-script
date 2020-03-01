@@ -8,11 +8,11 @@ here.
 ## Find Paths
 
 Allows you to draw thousands of shortest paths in any city between two random points, or between
-one fixed point and one random point. 
+one fixed point and thousands random points. 
 
 ![find paths demo](https://i.imgur.com/m0WkkfG.png)
 
-If you have long distance friends, or loved ones, you can make a perfect gift, drawing "all roads lead to you" city
+If you have long distance loved ones you can make a perfect gift, drawing "all roads lead to you" city
 
 [Read documentation here](FindPaths.md)
 
