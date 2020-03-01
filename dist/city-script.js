@@ -49,7 +49,7 @@ module.exports = function elevation(scene, options = {}) {
 
   function renderHeights(api, getColor) {
     // Sometimes they want to keep the original city. Otherwise let's clear it
-    if (!options.keepScene) scene.clear();
+    if (!options.keepScene) mainLayer.hide();
     ensureLicenseVisible();
 
     let wgl = scene.getWGL();
@@ -304,13 +304,13 @@ module.exports = function findPaths(scene, options) {
   let distanceFunction = getDistanceFunction(options.distance);
 
   // Helper data structures to perform graph algorithms.
-  let {graph, nodes, nodeIds, projector} = getGraphFromScene(scene);
+  let {graph, nodes, nodeIds, projector, mainLayer} = getGraphFromScene(scene);
 
   // Should we search single source shortest paths, or just randomly sample graph?
   let foundFromId = getSourceNodeId(options.from);
 
   // Sometimes they want to keep the original city. Otherwise let's clear it
-  if (!options.keepScene) scene.clear();
+  if (!options.keepScene) mainLayer.hide();
 
   let linksCount = graph.getLinksCount();
   let wgl = scene.getWGL();
@@ -448,15 +448,15 @@ function getDistanceFunction(optionsFunction) {
 }
 
 function getGraphFromScene(scene) {
-  let firstLayer = scene.queryLayer();
-  let projector = firstLayer.grid.getProjector();
+  let mainLayer = scene.queryLayer();
+  let projector = mainLayer.grid.getProjector();
 
-  let nodes = firstLayer.grid.nodes;
+  let nodes = mainLayer.grid.nodes;
   let nodeIds = Array.from(nodes.keys());
 
-  let graph = toGraph(firstLayer)
+  let graph = toGraph(mainLayer)
 
-  return {projector, graph, nodes, nodeIds};
+  return {projector, graph, nodes, nodeIds, mainLayer};
 }
 
 function canberra(node1, node2) {
