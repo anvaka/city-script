@@ -3,7 +3,7 @@
 This script renders roads with different colors based on elevation level above the sea. The data comes from
 [MapBox](https://blog.mapbox.com/global-elevation-data-6689f1d0ba65).
 
-It is part of the growing collection of scripts for the city roads website. [See more scripts here](https://github.com/anvaka/city-script#city-script);
+It is part of the growing collection of scripts for the city roads website. [See more scripts here](https://github.com/anvaka/city-script#city-script)
 
 ## usage
 
