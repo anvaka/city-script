@@ -12,8 +12,14 @@ const tileSize = 512;
 let imageCache = new Map();
 const d2r = Math.PI / 180;
 
-module.exports = function elevation(scene, options = {}) {
-  if (!scene) scene = window.scene;
+module.exports = function elevation(options = {}) {
+  if (options === window.scene) {
+    console.warn('The (scene, options) API is deprecated, use (options) instead. Read more here:')
+    console.warn('https://github.com/anvaka/city-script/blob/master/Elevation.md')
+    throw new Error('Please read https://github.com/anvaka/city-script/blob/master/Elevation.md')
+  }
+
+  const scene = options.scene || window.scene;
   let mainLayer = scene.queryLayer();
   const grid = mainLayer.grid;
   let nodes = grid.nodes;
@@ -296,10 +302,15 @@ let distances = {
   canberra
 }
 
-module.exports = function findPaths(scene, options) {
-  if (!scene) scene = window.scene;
+module.exports = function findPaths(options) {
+  if (options === window.scene) {
+    console.warn('The (scene, options) API is deprecated, please read the new API here:')
+    console.warn('https://github.com/anvaka/city-script/blob/master/FindPaths.md')
+    throw new Error('Please read https://github.com/anvaka/city-script/blob/master/FindPaths.md')
+  }
   options = options || {};
 
+  const scene = options.scene || window.scene;
   // We will be using seed random number generator, so that results are predictable.
   const random = createRandom(options.seed || 42);
 
@@ -490,8 +501,8 @@ module.exports.distances = distances;
 },{"./toGraph":5,"ngraph.path":16,"ngraph.random":17}],4:[function(require,module,exports){
 let EPS = 1e-8;
 
-module.exports = function orientation(scene, options = {}) {
-  if (!scene) scene = window.scene;
+module.exports = function orientation(options = {}) {
+  const scene = options.scene || window.scene;
   const layer = options.layer || scene.queryLayer();
   const grid = layer.grid;
 

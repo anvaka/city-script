@@ -24,6 +24,14 @@ This script reads elevation data from MapBox and allows you to color roads based
 
 [Read documentation here](Elevation.md)
 
+## Roads orientation
+
+This script renders a histogram of roads length-directions. You can click on bars to highlight matching roads:
+
+![road orientations](https://i.imgur.com/BS5LGRz.png)
+
+[Read documentation here](Orientation.md)
+
 ## More scripts
 
 I hope to add more scripts. If you have requests - please do not hesitate to open [issue here](https://github.com/anvaka/city-script/issues), or [ping me on twitter](https://twitter.com/anvaka).
