@@ -14,10 +14,10 @@ let city = await requireModule('city-script');
 
 The `city` object is your access point to all the scripts in the current repository.
 
-## city.findPaths(scene, options?)
+## city.findPaths(options?)
 
 ``` js
-city.findPaths(scene);
+city.findPaths();
 ```
 
 This will clear the scene, and will perform search of the shortest paths between 2,000 random
@@ -31,7 +31,7 @@ You can pick any location in the city, and visualize shortest paths from it to a
 points:
 
 ``` js
-city.findPaths(scene, {
+city.findPaths({
   from: { lat: 47.8167059, lon: -122.3293886 }
 })
 ```
@@ -43,7 +43,7 @@ Note: You can use google maps to find [the lon/lat values](https://www.clubrunne
 If 2,000 is too much/too little for your city, you can adjust it:
 
 ``` js
-city.findPaths(scene, {
+city.findPaths({
   count: 10000, // Show 10,000 shortest paths to collect
   from: { lat: 47.8167059, lon: -122.3293886 }
 })
@@ -56,7 +56,7 @@ If you prefer to render shortest paths along with the original city, do the foll
 
 ``` js
 // Let's kick of the shortest paths computation: 
-let paths = city.findPaths(scene, {
+let paths = city.findPaths({
   keepScene: true,
   from: { lat: 47.8167059, lon: -122.3293886 }
 });

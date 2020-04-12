@@ -11,7 +11,7 @@ To initialize the script, load a city, then open [developer tools](https://suppo
 
 ``` js
 let city = await requireModule('city-script');
-let d = await city.elevation(scene);
+let d = await city.elevation();
 ```
 
 Wait a few seconds and the elevation api should be ready.
@@ -67,7 +67,7 @@ and paste this code:
 
 ``` js
 let city = await requireModule('city-script');
-let d = await city.elevation(scene);
+let d = await city.elevation();
 
 function doAnimation(options) {
   let min = -1, max = 100, color = 0x0066ffff;
@@ -78,7 +78,7 @@ function doAnimation(options) {
   }
 
   let lastHeight = min;
-  let name = scene.queryLayer().grid.name.split(',')[0];
+  let name = window.scene.queryLayer().grid.name.split(',')[0];
 
   frame();
 
