@@ -2,7 +2,7 @@
 
 This script renders a polar histogram of roads orientation within any city. The size of the
 bar in this histogram shows total length of roads in the direction of the bar.
-[See more scripts here](https://github.com/anvaka/city-script#city-script);
+[See more scripts here](https://github.com/anvaka/city-script#city-script)
 
 ## usage
 
@@ -25,8 +25,8 @@ This will render a default histogram:
 
 ![default histogram](https://i.imgur.com/BS5LGRz.png)
 
-Once the histogram is loaded, you can click on it. When border is dotted - you can drag it around.
-When border is solid - you can click on any area in the circle, to highlight matching roads.
+Once the histogram is loaded, you can click on it. When border border is dotted - you can drag it around.
+When the border is solid - you can click on any area in the circle, to highlight matching roads.
 
 Holding `shift` key adds slices to collection. Holding `alt` key inverts the selection. You can then 
 open `customize` window to hide original roads or change colors. Here is how Seattle looks like if you
@@ -75,3 +75,7 @@ city.orientation({
 ```
 
 ![count of buckets](https://i.imgur.com/KXyAjxs.png)
+
+## like what you see?
+
+Play with your city here: https://anvaka.github.io/city-roads
