@@ -32,6 +32,15 @@ This script renders a histogram of roads length-directions. You can click on bar
 
 [Read documentation here](Orientation.md)
 
+## Sampling nodes
+
+This script samples `N` nodes from the graph, and assigns nearest neighbors to the sampled
+nodes using color. Nodes are sampled based on either longest shortest distance between
+all previously sampled nodes or with probably proportional to the shortest distance.
+
+![sample nodes](https://i.imgur.com/MyReeY4.png)
+
+[Read documentation here](Sampling.md)
 ## More scripts
 
 I hope to add more scripts. If you have requests - please do not hesitate to open [issue here](https://github.com/anvaka/city-script/issues), or [ping me on twitter](https://twitter.com/anvaka).
