@@ -60,6 +60,34 @@ d.drawWithColor(elevation => {
 });
 ```
 
+## d.saveHeightMap(filename: string)
+
+Generate and download a grayscale heightmap image that matches the current viewport. The heightmap provides elevation data as a PNG image where darker pixels represent lower elevations and lighter pixels represent higher elevations.
+
+``` js
+// Save a heightmap with default filename
+d.saveHeightMap('city-heightmap'); 
+
+// The filename will automatically include the elevation range
+// e.g., 'city-heightmap_15m-342m.png'
+```
+
+The heightmap has these key features:
+
+- **Perfect SVG alignment**: Dimensions match SVG exports exactly for 1:1 pixel mapping
+- **Geographic accuracy**: Each pixel corresponds to real-world coordinates  
+- **Elevation encoding**: Grayscale values from 0 (minimum elevation) to 255 (maximum elevation)
+- **Automatic naming**: Filename includes the elevation range (e.g., `_15m-342m.png`)
+- **Progress logging**: Console shows tile loading and processing progress
+
+This is useful for:
+- Creating elevation overlays for other graphics software
+- Generating terrain data for 3D modeling
+- Analyzing elevation patterns across the city
+- Creating custom visualizations with precise elevation data
+
+The heightmap coordinates perfectly align with SVG exports, making it easy to combine elevation data with vector graphics of the road network.
+
 ## Animation
 
 This is just an example of how you can make an animation of raising animation. Open developer tools
