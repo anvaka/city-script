@@ -52,6 +52,9 @@ module.exports = function elevation(options = {}) {
         let color = scene.lineColor.toRgb();
         let defaultColor = (color.r << 24) | (color.g << 16) | (color.b << 8) | Math.round(color.a * 0xff);
         return renderHeights(elevationAPI, pointHeight => pointHeight < height ? belowWaterColor : defaultColor)
+      },
+      saveHeightMap(filename) {
+        return generateHeightMap(elevationAPI, filename);
       }
     }
   }
@@ -129,6 +132,219 @@ module.exports = function elevation(options = {}) {
     a.style.marginLeft = '2px';
     document.querySelector('.license.printable').appendChild(a);
   }
+
+  function generateHeightMap(elevationAPI, filename) {
+    // Get exact same dimensions as SVG export uses
+    const drawContext = scene.getRenderer().getDrawContext();
+    const canvasWidth = drawContext.width;
+    const canvasHeight = drawContext.height;
+    
+    // Also check the actual canvas element dimensions for debugging
+    const canvasElement = drawContext.canvas;
+    const canvasElementWidth = canvasElement.width;
+    const canvasElementHeight = canvasElement.height;
+    const canvasClientWidth = canvasElement.clientWidth;
+    const canvasClientHeight = canvasElement.clientHeight;
+    const pixelRatio = drawContext.pixelRatio;
+    
+    console.log(`DrawContext dimensions: ${canvasWidth}x${canvasHeight}`);
+    console.log(`Canvas element dimensions: ${canvasElementWidth}x${canvasElementHeight}`);
+    console.log(`Canvas client dimensions: ${canvasClientWidth}x${canvasClientHeight}`);
+    console.log(`Pixel ratio: ${pixelRatio}`);
+    
+    // The SVG export uses DrawContext dimensions for the viewBox
+    // But getSceneCoordinate expects CLIENT coordinates (before pixel ratio scaling)
+    // So we need to use client dimensions for coordinate conversion
+    const clientWidth = canvasClientWidth;
+    const clientHeight = canvasClientHeight;
+    
+    console.log(`Using client dimensions for coordinate conversion: ${clientWidth}x${clientHeight}`);
+    console.log(`SVG viewBox will be: ${canvasWidth}x${canvasHeight}`);
+    
+    // Always match SVG dimensions exactly for perfect 1:1 pixel mapping
+    const heightmapWidth = Math.round(canvasWidth);
+    const heightmapHeight = Math.round(canvasHeight);
+    console.log(`Heightmap dimensions (matching SVG exactly): ${heightmapWidth}x${heightmapHeight}`);
+    
+    // Collect all geographic coordinates we need elevation data for
+    const geoCoordinates = [];
+    const pixelToCoordMap = [];
+    const totalPixels = heightmapWidth * heightmapHeight;
+    let mappedPixels = 0;
+    
+    console.log(`Mapping ${totalPixels} pixels to geographic coordinates...`);
+    
+    for (let y = 0; y < heightmapHeight; y++) {
+      pixelToCoordMap[y] = [];
+      for (let x = 0; x < heightmapWidth; x++) {
+        // Convert heightmap pixel to CLIENT coordinates (what getSceneCoordinate expects)
+        const clientX = (x / (heightmapWidth - 1)) * (clientWidth - 1);
+        const clientY = (y / (heightmapHeight - 1)) * (clientHeight - 1);
+        
+        // Use w-gl's coordinate conversion to get world coordinates
+        const worldPos = scene.getRenderer().getSceneCoordinate(clientX, clientY);
+        
+        if (worldPos) {
+          // Convert world coordinates to lon/lat, accounting for Grid's Y negation
+          // Grid's project function does: y: -xyPoint[1], so we reverse it
+          const unNegatedY = -worldPos[1];
+          const lonLat = grid.projector.invert([worldPos[0], unNegatedY]);
+          
+          if (lonLat && !isNaN(lonLat[0]) && !isNaN(lonLat[1])) {
+            const coord = { lon: lonLat[0], lat: lonLat[1] };
+            geoCoordinates.push(coord);
+            pixelToCoordMap[y][x] = coord;
+            
+            // Debug first few coordinates
+            if (y < 3 && x < 3) {
+              console.log(`Pixel [${x},${y}] -> client [${clientX.toFixed(1)},${clientY.toFixed(1)}] -> world [${worldPos[0].toFixed(1)},${worldPos[1].toFixed(1)}] -> geo [${lonLat[0].toFixed(6)},${lonLat[1].toFixed(6)}]`);
+            }
+          } else {
+            pixelToCoordMap[y][x] = null;
+          }
+        } else {
+          pixelToCoordMap[y][x] = null;
+        }
+        
+        mappedPixels++;
+        
+        // Log progress every 10% of pixels
+        if (mappedPixels % Math.floor(totalPixels / 10) === 0) {
+          const percent = Math.round((mappedPixels / totalPixels) * 100);
+          console.log(`Coordinate mapping: ${percent}% complete`);
+        }
+      }
+    }
+    
+    // Calculate geographic bounds for the visible area
+    const geoBounds = calculateGeoBounds(geoCoordinates);
+    console.log('Geographic bounds:', geoBounds);
+    
+    // Load elevation tiles for this geographic area
+    const elevationTiles = getTileCover(geoBounds, options.zoomLevel);
+    console.log('Elevation tiles needed:', elevationTiles);
+    
+    return loadTiles(elevationTiles).then(viewportElevationAPI => {
+      console.log('Generating heightmap...');
+      const heightMapCanvas = document.createElement('canvas');
+      heightMapCanvas.width = heightmapWidth;
+      heightMapCanvas.height = heightmapHeight;
+      const ctx = heightMapCanvas.getContext('2d');
+      
+      // Sample elevations for each pixel
+      const heightSamples = [];
+      let minHeight = Infinity;
+      let maxHeight = -Infinity;
+      let validSamples = 0;
+      const totalPixels = heightmapWidth * heightmapHeight;
+      let processedPixels = 0;
+      
+      console.log(`Sampling elevations for ${totalPixels} pixels...`);
+      
+      for (let y = 0; y < heightmapHeight; y++) {
+        for (let x = 0; x < heightmapWidth; x++) {
+          const coord = pixelToCoordMap[y][x];
+          let elevation = NaN;
+          
+          if (coord) {
+            elevation = viewportElevationAPI.getElevation(coord.lon, coord.lat);
+            if (!isNaN(elevation)) {
+              minHeight = Math.min(minHeight, elevation);
+              maxHeight = Math.max(maxHeight, elevation);
+              validSamples++;
+            }
+          }
+          
+          heightSamples.push(elevation);
+          processedPixels++;
+          
+          // Log progress every 10% of pixels
+          if (processedPixels % Math.floor(totalPixels / 10) === 0) {
+            const percent = Math.round((processedPixels / totalPixels) * 100);
+            console.log(`Sampling elevations: ${percent}% complete`);
+          }
+        }
+      }
+      
+      console.log(`Valid height range: ${minHeight.toFixed(2)}m to ${maxHeight.toFixed(2)}m`);
+      console.log(`Valid samples: ${validSamples}/${heightSamples.length} (${(100 * validSamples / heightSamples.length).toFixed(1)}%)`);
+      
+      const heightRange = maxHeight - minHeight;
+      
+      console.log('Creating heightmap image...');
+      
+      // Create grayscale heightmap
+      const imageData = ctx.createImageData(heightmapWidth, heightmapHeight);
+      const data = imageData.data;
+      
+      for (let i = 0; i < heightSamples.length; i++) {
+        const height = heightSamples[i];
+        let normalizedHeight = 0;
+        
+        if (!isNaN(height) && heightRange > 0) {
+          normalizedHeight = (height - minHeight) / heightRange;
+        }
+        
+        const grayValue = Math.round(normalizedHeight * 255);
+        
+        const pixelIndex = i * 4;
+        data[pixelIndex] = grayValue;     // R
+        data[pixelIndex + 1] = grayValue; // G  
+        data[pixelIndex + 2] = grayValue; // B
+        data[pixelIndex + 3] = 255;       // A
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+      
+      // Save the heightmap with height range in filename
+      const baseFilename = filename.endsWith('.png') ? filename.slice(0, -4) : filename;
+      const heightRangeString = `_${minHeight.toFixed(0)}m-${maxHeight.toFixed(0)}m`;
+      const filenameWithExt = `${baseFilename}${heightRangeString}.png`;
+      
+      heightMapCanvas.toBlob(function(blob) {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filenameWithExt;
+        a.click();
+        
+        // Clean up URL after download
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+        }, 45000);
+      }, 'image/png');
+      
+      console.log(`Heightmap saved as ${filenameWithExt} (${heightmapWidth}x${heightmapHeight})`);
+      console.log(`Height range: ${minHeight.toFixed(2)}m to ${maxHeight.toFixed(2)}m`);
+      console.log(`SVG viewBox: 0 0 ${canvasWidth} ${canvasHeight}`);
+      console.log(`Perfect 1:1 pixel mapping with SVG export!`);
+      console.log(`Geographic bounds: ${geoBounds.west.toFixed(6)}, ${geoBounds.south.toFixed(6)} to ${geoBounds.east.toFixed(6)}, ${geoBounds.north.toFixed(6)}`);
+    });
+  }
+
+  function calculateGeoBounds(geoCoordinates) {
+    if (geoCoordinates.length === 0) {
+      return {
+        west: 0, east: 0, north: 0, south: 0
+      };
+    }
+    
+    let bounds = {
+      west: Infinity,
+      east: -Infinity,
+      north: -Infinity,
+      south: Infinity
+    };
+    
+    geoCoordinates.forEach(coord => {
+      if (coord.lon < bounds.west) bounds.west = coord.lon;
+      if (coord.lon > bounds.east) bounds.east = coord.lon;
+      if (coord.lat < bounds.south) bounds.south = coord.lat;
+      if (coord.lat > bounds.north) bounds.north = coord.lat;
+    });
+    
+    return bounds;
+  }
 }
 
 function getTileCover(bounds, zoomLevel) {
@@ -191,6 +407,11 @@ function loadTiles(tileBounds) {
 
   const ctx = canvas.getContext('2d');
   let imageData;
+  let tilesLoaded = 0;
+  const totalTiles = coveringTiles.length;
+  
+  console.log(`Loading ${totalTiles} elevation tiles...`);
+  
   const tilesToLoad = coveringTiles.map(toLoadedTile)
 
   return Promise.all(tilesToLoad).then(constructAPI);
@@ -223,6 +444,10 @@ function loadTiles(tileBounds) {
     return loadImage(request.url)
       .then(drawTileImage)
       .catch(drawBlankTile)
+      .finally(() => {
+        tilesLoaded++;
+        console.log(`Loaded elevation tile ${tilesLoaded}/${totalTiles}`);
+      });
 
     function drawTileImage(image) {
       ctx.drawImage(image, request.x, request.y);
