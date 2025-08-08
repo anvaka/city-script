@@ -88,6 +88,37 @@ This is useful for:
 
 The heightmap coordinates perfectly align with SVG exports, making it easy to combine elevation data with vector graphics of the road network.
 
+## d.saveWaterMap(filename?: string)
+
+Generate and download a water mask image that shows all water bodies (oceans, lakes, rivers) in the current viewport. The water map is rendered as a transparent PNG with black fill for water areas and full transparency for land areas.
+
+``` js
+// Save a water map with default filename
+await d.saveWaterMap('city-water'); 
+
+// Will be saved as 'city-water.png'
+```
+
+The water map has these key features:
+
+- **Vector tile data**: Uses OpenStreetMap Shortbread vector tiles for accurate water boundaries
+- **Perfect viewport alignment**: Dimensions match the current scene viewport exactly
+- **High precision**: Water polygons are rendered with sub-pixel accuracy
+- **Transparent background**: Only water areas are filled (black), land is transparent
+- **Multi-layer support**: Combines ocean and water polygon layers
+- **Hole handling**: Properly renders islands within water bodies using even-odd fill rule
+
+This is useful for:
+- Creating water masks for terrain visualization
+- Combining with elevation data to identify underwater areas
+- Generating custom map overlays
+- Masking operations in graphics software
+- Environmental analysis and flood modeling
+
+The water map coordinates perfectly align with both SVG exports and heightmaps, enabling seamless layer composition in external tools.
+
+**Note**: The method is asynchronous and should be awaited. Vector tile coverage is automatically determined from the viewport bounds, with a maximum of 400 tiles (20x20) to prevent excessive data requests.
+
 ## Animation
 
 This is just an example of how you can make an animation of raising animation. Open developer tools
